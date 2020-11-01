@@ -28,3 +28,8 @@ jobs:
           name: helmpush-acceptance-report-${{ github.sha }}
           path: .robot/
         if: always()
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v2
+        with:
+          version: latest
+          args: release --rm-dist

@@ -20,8 +20,9 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 		return nil, err
 	}
 
+	fmt.Printf("BEFORE JOIN:", u.String())
 	u.Path = path.Join(filepath.Base(chartPackagePath))
-	fmt.Printf("UPLOAD URI: ", u.String())
+	fmt.Printf("AFTER JOIN:", u.String())
 	req, err := http.NewRequest("PUT", u.String(), nil)
 	if err != nil {
 		return nil, err
