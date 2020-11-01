@@ -10,7 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"strings"
+	"path/filepath"
 )
 
 // UploadChartPackage uploads a chart package to ChartMuseum (POST /api/charts)
@@ -20,8 +20,9 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 		return nil, err
 	}
 
-	u.Path = path.Join(client.opts.contextPath, "api", strings.TrimPrefix(u.Path, client.opts.contextPath), "charts")
-	req, err := http.NewRequest("POST", u.String(), nil)
+	fmt.Printf("UPLOAD URI: ", u.String())
+	u.Path = path.Join(client.opts.contextPath, filepath.Base(chartPackagePath))
+	req, err := http.NewRequest("PUT", u.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -51,23 +52,23 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 
 func setUploadChartPackageRequestBody(req *http.Request, chartPackagePath string) error {
 	var body bytes.Buffer
-	w := multipart.NewWriter(&body)
-	defer w.Close()
-	fw, err := w.CreateFormFile("chart", chartPackagePath)
+	writer := multipart.NewWriter(&body)
+	defer writer.Close()
+	fw, err := writer.CreateFormFile("chart", chartPackagePath)
 	if err != nil {
 		return err
 	}
-	w.FormDataContentType()
-	fd, err := os.Open(chartPackagePath)
+	writer.FormDataContentType()
+	file, err := os.Open(chartPackagePath)
 	if err != nil {
 		return err
 	}
-	defer fd.Close()
-	_, err = io.Copy(fw, fd)
+	defer file.Close()
+	_, err = io.Copy(fw, file)
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Body = ioutil.NopCloser(&body)
 	return nil
 }
