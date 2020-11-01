@@ -20,7 +20,7 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 		return nil, err
 	}
 
-	u.Path = path.Join(client.opts.contextPath, filepath.Base(chartPackagePath))
+	u.Path = path.Join(filepath.Base(chartPackagePath))
 	fmt.Printf("UPLOAD URI: ", u.String())
 	req, err := http.NewRequest("PUT", u.String(), nil)
 	if err != nil {
