@@ -15,14 +15,15 @@ import (
 
 // UploadChartPackage uploads a chart package to ChartMuseum (POST /api/charts)
 func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*http.Response, error) {
+	fmt.Println(client.opts.url)
 	u, err := url.Parse(client.opts.url)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Printf("BEFORE JOIN:", u.String())
+	fmt.Println("BEFORE JOIN:", u.String())
 	u.Path = path.Join(filepath.Base(chartPackagePath))
-	fmt.Printf("AFTER JOIN:", u.String())
+	fmt.Println("AFTER JOIN:", u.String())
 	req, err := http.NewRequest("PUT", u.String(), nil)
 	if err != nil {
 		return nil, err
