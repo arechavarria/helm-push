@@ -20,5 +20,5 @@ archives:
   - id: tarball
     format: tar.gz
     files:
-      - LICENSE
       - plugin.yaml
+      - scripts/install_plugin.sh

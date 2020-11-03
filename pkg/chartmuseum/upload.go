@@ -1,11 +1,8 @@
 package chartmuseum
 
 import (
-	"bytes"
+	"bufio"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"mime/multipart"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,16 +12,16 @@ import (
 
 // UploadChartPackage uploads a chart package to ChartMuseum (POST /api/charts)
 func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*http.Response, error) {
-	fmt.Println(client.opts.url)
 	u, err := url.Parse(client.opts.url)
 	if err != nil {
 		return nil, err
 	}
 
-	fmt.Println("BEFORE JOIN:", u.String())
+	f, err := os.Open(chartPackagePath)
+	payload := bufio.NewReader(f)
+
 	u.Path = path.Join(u.Path, filepath.Base(chartPackagePath))
-	fmt.Println("AFTER JOIN:", u.String())
-	req, err := http.NewRequest("PUT", u.String(), nil)
+	req, err := http.NewRequest("PUT", u.String(), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -32,11 +29,6 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 	// Add ?force to request querystring to force an upload if chart version already exists
 	if force {
 		req.URL.RawQuery = "force"
-	}
-
-	err = setUploadChartPackageRequestBody(req, chartPackagePath)
-	if err != nil {
-		return nil, err
 	}
 
 	if client.opts.accessToken != "" {
@@ -50,27 +42,4 @@ func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*
 	}
 
 	return client.Do(req)
-}
-
-func setUploadChartPackageRequestBody(req *http.Request, chartPackagePath string) error {
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-	defer writer.Close()
-	fw, err := writer.CreateFormFile("chart", chartPackagePath)
-	if err != nil {
-		return err
-	}
-	writer.FormDataContentType()
-	file, err := os.Open(chartPackagePath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	_, err = io.Copy(fw, file)
-	if err != nil {
-		return err
-	}
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	req.Body = ioutil.NopCloser(&body)
-	return nil
 }

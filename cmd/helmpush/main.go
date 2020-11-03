@@ -4,8 +4,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	cm "github.com/chartmuseum/helm-push/pkg/chartmuseum"
+	"github.com/chartmuseum/helm-push/pkg/helm"
+	"github.com/ghodss/yaml"
+	"github.com/spf13/cobra"
+	"helm.sh/helm/v3/pkg/chartutil"
+	"helm.sh/helm/v3/pkg/cli"
+	"helm.sh/helm/v3/pkg/downloader"
+	"helm.sh/helm/v3/pkg/getter"
 	"io"
 	"io/ioutil"
+	v2environment "k8s.io/helm/pkg/helm/environment"
+	"k8s.io/helm/pkg/provenance"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,18 +25,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	cm "github.com/chartmuseum/helm-push/pkg/chartmuseum"
-	"github.com/chartmuseum/helm-push/pkg/helm"
-	"github.com/ghodss/yaml"
-	"github.com/spf13/cobra"
-	"helm.sh/helm/v3/pkg/chartutil"
-	"helm.sh/helm/v3/pkg/cli"
-	"helm.sh/helm/v3/pkg/downloader"
-	"helm.sh/helm/v3/pkg/getter"
-	v2downloader "k8s.io/helm/pkg/downloader"
-	v2getter "k8s.io/helm/pkg/getter"
-	v2environment "k8s.io/helm/pkg/helm/environment"
 )
 
 type (
@@ -65,7 +63,7 @@ type (
 var (
 	v2settings  v2environment.EnvSettings
 	settings    = cli.New()
-	globalUsage = `Helm plugin to push chart package to ChartMuseum
+	globalUsage = `Helm plugin to push chart package to Nexus
 
 Examples:
 
@@ -225,30 +223,18 @@ func (p *pushCmd) push() error {
 			if err != nil {
 				return err
 			}
-			if helm.HelmMajorVersionCurrent() == helm.HelmMajorVersion2 {
-				v2downloadManager := &v2downloader.Manager{
-					Out:       p.out,
-					ChartPath: chartPath,
-					HelmHome:  v2settings.Home,
-					Keyring:   p.keyring,
-					Getters:   v2getter.All(v2settings),
-					Debug:     v2settings.Debug,
-				}
-				if err := v2downloadManager.Update(); err != nil {
-					return err
-				}
-			} else {
-				downloadManager := &downloader.Manager{
-					Out:       p.out,
-					ChartPath: chartPath,
-					Keyring:   p.keyring,
-					Getters:   getter.All(settings),
-					Debug:     v2settings.Debug,
-				}
-				if err := downloadManager.Update(); err != nil {
-					return err
-				}
+
+			downloadManager := &downloader.Manager{
+				Out:       p.out,
+				ChartPath: chartPath,
+				Keyring:   p.keyring,
+				Getters:   getter.All(settings),
+				Debug:     v2settings.Debug,
 			}
+			if err := downloadManager.Update(); err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -303,11 +289,13 @@ func (p *pushCmd) push() error {
 	}
 
 	// update context path if not overrided
+
+	index, err := helm.GetIndexByRepo(repo, getIndexDownloader(client))
+	if err != nil {
+		return err
+	}
+
 	if p.contextPath == "" {
-		index, err := helm.GetIndexByRepo(repo, getIndexDownloader(client))
-		if err != nil {
-			return err
-		}
 		client.Option(cm.ContextPath(index.ServerInfo.ContextPath))
 	}
 
@@ -322,8 +310,23 @@ func (p *pushCmd) push() error {
 		return err
 	}
 
+	digest, err := provenance.DigestFile(chartPackagePath)
+	if err != nil {
+		return err
+	}
+
 	fmt.Printf("Pushing %s to %s...\n", filepath.Base(chartPackagePath), p.repoName)
 	resp, err := client.UploadChartPackage(chartPackagePath, p.forceUpload)
+	if err != nil {
+		return err
+	}
+
+	tmpIndex, err := ioutil.TempDir("", "helm-push-index-")
+	index.IndexFile.Add(chart.V3.Metadata, filepath.Base(chartPackagePath),repo.Config.URL, digest)
+	index.IndexFile.SortEntries()
+	index.IndexFile.WriteFile(filepath.Join(tmpIndex, "index.yaml"), 0644)
+	fmt.Printf("Pushing %s to %s...\n", filepath.Base(filepath.Join(tmpIndex, "index.yaml")), p.repoName)
+	_, err = client.UploadChartPackage(filepath.Join(tmpIndex, "index.yaml"), p.forceUpload)
 	if err != nil {
 		return err
 	}

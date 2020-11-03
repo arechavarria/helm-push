@@ -31,7 +31,7 @@ func HelmMajorVersionCurrent() HelmMajorVersion {
 	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
 		helmMajorVersionCurrent = HelmMajorVersion3
 	} else {
-		helmMajorVersionCurrent = HelmMajorVersion2
+		helmMajorVersionCurrent = HelmMajorVersion3
 	}
 	return helmMajorVersionCurrent
 }
