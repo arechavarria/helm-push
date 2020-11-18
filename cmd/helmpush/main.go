@@ -15,7 +15,6 @@ import (
 	"io"
 	"io/ioutil"
 	v2environment "k8s.io/helm/pkg/helm/environment"
-	"k8s.io/helm/pkg/provenance"
 	"net/http"
 	"net/url"
 	"os"
@@ -288,9 +287,7 @@ func (p *pushCmd) push() error {
 		return err
 	}
 
-	// update context path if not overrided
-
-	index, err := helm.GetIndexByRepo(repo, getIndexDownloader(client))
+	index, err := downLoadIndex(client)
 	if err != nil {
 		return err
 	}
@@ -310,7 +307,7 @@ func (p *pushCmd) push() error {
 		return err
 	}
 
-	digest, err := provenance.DigestFile(chartPackagePath)
+	newIndex ,err := helm.IndexDirectory(filepath.Dir(chartPackagePath), repo.Config.URL);
 	if err != nil {
 		return err
 	}
@@ -322,7 +319,7 @@ func (p *pushCmd) push() error {
 	}
 
 	tmpIndex, err := ioutil.TempDir("", "helm-push-index-")
-	index.IndexFile.Add(chart.V3.Metadata, filepath.Base(chartPackagePath),repo.Config.URL, digest)
+	index.IndexFile.Merge(newIndex)
 	index.IndexFile.SortEntries()
 	index.IndexFile.WriteFile(filepath.Join(tmpIndex, "index.yaml"), 0644)
 	fmt.Printf("Pushing %s to %s...\n", filepath.Base(filepath.Join(tmpIndex, "index.yaml")), p.repoName)
@@ -423,22 +420,27 @@ func getChartmuseumError(b []byte, code int) error {
 	return fmt.Errorf("%d: %s", code, er.Error)
 }
 
-func getIndexDownloader(client *cm.Client) helm.IndexDownloader {
-	return func() ([]byte, error) {
-		resp, err := client.DownloadFile("index.yaml")
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-		b, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-		if resp.StatusCode != 200 {
-			return nil, getChartmuseumError(b, resp.StatusCode)
-		}
-		return b, nil
+
+func downLoadIndex(client *cm.Client) (*helm.Index, error) {
+	resp, err := client.DownloadFile("index.yaml")
+	if err != nil {
+		return nil, err
 	}
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != 200 {
+		return nil, getChartmuseumError(b, resp.StatusCode)
+	}
+	ind, err := helm.LoadIndex(b)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return ind,err
 }
 
 func main() {

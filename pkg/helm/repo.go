@@ -105,3 +105,7 @@ func findRepoEntry(name string, r *repo.File) (*repo.Entry, bool) {
 	}
 	return entry, exists
 }
+
+func IndexDirectory(path, url string) (*repo.IndexFile, error) {
+	return repo.IndexDirectory(path, url);
+}

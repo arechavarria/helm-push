@@ -1,5 +1,5 @@
 name: "push"
-version: "1.0.0"
+version: "1.0.1"
 usage: "Please see https://gitlab.evertecinc.com/mi-banco/helm-pushg for usage"
 description: "Push chart package to Nexus"
 command: "$HELM_PLUGIN_DIR/bin/helmpush"
