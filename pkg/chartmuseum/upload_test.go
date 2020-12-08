@@ -54,7 +54,7 @@ func TestUploadChartPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[happy path] expect creating a client instance but met error: %s", err)
 	}
-	resp, err := cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err := cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Error("error uploading chart package", err)
 	}
@@ -63,7 +63,7 @@ func TestUploadChartPackage(t *testing.T) {
 	}
 
 	// Attempt to re-upload without force, trigger 409
-	resp, err = cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err = cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Error("error uploading chart package", err)
 	}
@@ -72,7 +72,7 @@ func TestUploadChartPackage(t *testing.T) {
 	}
 
 	// Upload with force
-	resp, err = cmClient.UploadChartPackage(testTarballPath, true)
+	resp, err = cmClient.UploadFile(testTarballPath, true)
 	if err != nil {
 		t.Error("error uploading chart package", err)
 	}
@@ -81,14 +81,14 @@ func TestUploadChartPackage(t *testing.T) {
 	}
 
 	// Bad package path
-	resp, err = cmClient.UploadChartPackage("/non/existant/path/mychart-0.1.0.tgz", false)
+	resp, err = cmClient.UploadFile("/non/existant/path/mychart-0.1.0.tgz", false)
 	if err == nil {
 		t.Error("expecting error with bad package path, instead got nil")
 	}
 
 	// Bad URL
 	cmClient, _ = NewClient(URL("jaswehfgew"))
-	_, err = cmClient.UploadChartPackage(testTarballPath, false)
+	_, err = cmClient.UploadFile(testTarballPath, false)
 	if err == nil {
 		t.Error("[bad URL] expecting error with bad package path, instead got nil")
 	}
@@ -105,7 +105,7 @@ func TestUploadChartPackage(t *testing.T) {
 		t.Fatalf("[bad context path] expect creating a client instance but met error: %s", err)
 	}
 
-	resp, err = cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err = cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Error("unexpected error with bad context path", err)
 	}
@@ -123,7 +123,7 @@ func TestUploadChartPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[unauthorized: invalid user/pass] expect creating a client instance but met error: %s", err)
 	}
-	resp, err = cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err = cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Error("unexpected error with invalid user/pass combo (basic auth)", err)
 	}
@@ -139,7 +139,7 @@ func TestUploadChartPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("[unauthorized: missing user/pass] expect creating a client instance but met error: %s", err)
 	}
-	resp, err = cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err = cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Error("unexpected error with missing user/pass combo (basic auth)", err)
 	}
@@ -182,7 +182,7 @@ func TestUploadChartPackageWithTlsServer(t *testing.T) {
 		t.Fatalf("[without certificate] expect creating a client instance but met error: %s", err)
 	}
 
-	_, err = cmClient.UploadChartPackage(testTarballPath, false)
+	_, err = cmClient.UploadFile(testTarballPath, false)
 	if err == nil {
 		t.Fatal("expected error returned when uploading package without cert to tls enabled https server")
 	}
@@ -199,7 +199,7 @@ func TestUploadChartPackageWithTlsServer(t *testing.T) {
 		t.Fatalf("[enable insecure flag] expect creating a client instance but met error: %s", err)
 	}
 
-	resp, err := cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err := cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Fatalf("[enable insecure flag] expected nil error but got %s", err.Error())
 	}
@@ -219,7 +219,7 @@ func TestUploadChartPackageWithTlsServer(t *testing.T) {
 		t.Fatalf("[upload with ca file] expect creating a client instance but met error: %s", err)
 	}
 
-	resp, err = cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err = cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Fatalf("[upload with ca file] expected nil error but got %s", err.Error())
 	}
@@ -273,7 +273,7 @@ func TestUploadChartPackageWithVerifyingClientCert(t *testing.T) {
 		t.Fatalf("[upload with cert and key files] expect creating a client instance but met error: %s", err)
 	}
 
-	resp, err := cmClient.UploadChartPackage(testTarballPath, false)
+	resp, err := cmClient.UploadFile(testTarballPath, false)
 	if err != nil {
 		t.Fatalf("[upload with cert and key files] expected nil error but got %s", err.Error())
 	}

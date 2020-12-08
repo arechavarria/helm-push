@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 )
 
-// UploadChartPackage uploads a chart package to ChartMuseum (POST /api/charts)
-func (client *Client) UploadChartPackage(chartPackagePath string, force bool) (*http.Response, error) {
+// UploadFile uploads a chart package to Nexus
+func (client *Client) UploadFile(chartPackagePath string, force bool) (*http.Response, error) {
 	u, err := url.Parse(client.opts.url)
 	if err != nil {
 		return nil, err

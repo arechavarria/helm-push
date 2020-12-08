@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	cm "github.com/chartmuseum/helm-push/pkg/chartmuseum"
@@ -31,6 +30,9 @@ type (
 		chartName          string
 		chartVersion       string
 		repoName           string
+		repoIndex          string
+		repoSnapshot       string
+		repoRelease        string
 		username           string
 		password           string
 		accessToken        string
@@ -101,6 +103,11 @@ func newPushCmd(args []string) *cobra.Command {
 			}
 			p.chartName = args[0]
 			p.repoName = args[1]
+
+			p.repoIndex = p.repoName + "-index"
+			p.repoRelease = p.repoName + "-releases"
+			p.repoSnapshot = p.repoName + "-snapshots"
+
 			p.setFieldsFromEnv()
 			return p.push()
 		},
@@ -262,38 +269,37 @@ func (p *pushCmd) push() error {
 		p.accessToken = ""
 	}
 
-	// in case the repo is stored with cm:// protocol, remove it
-	var url string
-	if p.useHTTP {
-		url = strings.Replace(repo.Config.URL, "cm://", "http://", 1)
-	} else {
-		url = strings.Replace(repo.Config.URL, "cm://", "https://", 1)
-	}
+	p.username = username;
+	p.password = password;
 
-	client, err := cm.NewClient(
-		cm.URL(url),
-		cm.Username(username),
-		cm.Password(password),
-		cm.AccessToken(p.accessToken),
-		cm.AuthHeader(p.authHeader),
-		cm.ContextPath(p.contextPath),
-		cm.CAFile(p.caFile),
-		cm.CertFile(p.certFile),
-		cm.KeyFile(p.keyFile),
-		cm.InsecureSkipVerify(p.insecureSkipVerify),
-	)
-
+	indexClient, err := httpClient(p.repoIndex, repo, p)
 	if err != nil {
 		return err
 	}
 
-	index, err := downLoadIndex(client)
+	var chartClient *cm.Client;
+
+	if strings.Contains(strings.ToUpper(p.chartVersion), "SNAPSHOT") {
+		client, err := httpClient(p.repoSnapshot, repo, p)
+		if err != nil {
+			return err
+		}
+		chartClient = client;
+	} else {
+		client, err := httpClient(p.repoRelease, repo, p)
+		if err != nil {
+			return err
+		}
+		chartClient = client;
+	}
+
+	index, err := downLoadIndex(indexClient)
 	if err != nil {
 		return err
 	}
 
 	if p.contextPath == "" {
-		client.Option(cm.ContextPath(index.ServerInfo.ContextPath))
+		chartClient.Option(cm.ContextPath(index.ServerInfo.ContextPath))
 	}
 
 	tmp, err := ioutil.TempDir("", "helm-push-")
@@ -313,9 +319,13 @@ func (p *pushCmd) push() error {
 	}
 
 	fmt.Printf("Pushing %s to %s...\n", filepath.Base(chartPackagePath), p.repoName)
-	resp, err := client.UploadChartPackage(chartPackagePath, p.forceUpload)
+	resp, err := chartClient.UploadFile(chartPackagePath, p.forceUpload)
 	if err != nil {
 		return err
+	}
+
+	if resp.StatusCode != 201 {
+		return handlePushResponse(resp)
 	}
 
 	tmpIndex, err := ioutil.TempDir("", "helm-push-index-")
@@ -325,12 +335,12 @@ func (p *pushCmd) push() error {
 	newIndex.WriteFile(filepath.Join(tmpIndex, "index.yaml"), 0644)
 
 	fmt.Printf("Pushing %s to %s...\n", filepath.Base(filepath.Join(tmpIndex, "index.yaml")), p.repoName)
-	_, err = client.UploadChartPackage(filepath.Join(tmpIndex, "index.yaml"), p.forceUpload)
+	indexResponse, err := indexClient.UploadFile(filepath.Join(tmpIndex, "index.yaml"), p.forceUpload)
 	if err != nil {
 		return err
 	}
 
-	return handlePushResponse(resp)
+	return handlePushResponse(indexResponse)
 }
 
 func (p *pushCmd) download(fileURL string) error {
@@ -392,9 +402,11 @@ func handlePushResponse(resp *http.Response) error {
 		if err != nil {
 			return err
 		}
-		return getChartmuseumError(b, resp.StatusCode)
+		fmt.Println("Body: ", b)
+		fmt.Println("Status: ", resp.Status)
+		return fmt.Errorf("%d: Could not upload file", resp.StatusCode)
 	}
-	fmt.Println("Done.")
+	fmt.Println("Uploaded..")
 	return nil
 }
 
@@ -405,23 +417,13 @@ func handleDownloadResponse(resp *http.Response) error {
 		return err
 	}
 	if resp.StatusCode != 200 {
-		return getChartmuseumError(b, resp.StatusCode)
+		fmt.Println("Body: ", b)
+		fmt.Println("Status: ", resp.Status)
+		return fmt.Errorf("%d: Could not download file", resp.StatusCode)
 	}
 	fmt.Print(string(b))
 	return nil
 }
-
-func getChartmuseumError(b []byte, code int) error {
-	var er struct {
-		Error string `json:"error"`
-	}
-	err := json.Unmarshal(b, &er)
-	if err != nil || er.Error == "" {
-		return fmt.Errorf("%d: could not properly parse response JSON: %s", code, string(b))
-	}
-	return fmt.Errorf("%d: %s", code, er.Error)
-}
-
 
 func downLoadIndex(client *cm.Client) (*helm.Index, error) {
 	resp, err := client.DownloadFile("index.yaml")
@@ -434,7 +436,9 @@ func downLoadIndex(client *cm.Client) (*helm.Index, error) {
 		return nil, err
 	}
 	if resp.StatusCode != 200 {
-		return nil, getChartmuseumError(b, resp.StatusCode)
+		fmt.Println("Body: ", string(b))
+		fmt.Println("Status: ", resp.Status)
+		return nil,  fmt.Errorf("%d: Could not download file", resp.StatusCode)
 	}
 	ind, err := helm.LoadIndex(b)
 
@@ -455,4 +459,37 @@ func main() {
 // defaultKeyring returns the expanded path to the default keyring.
 func defaultKeyring() string {
 	return os.ExpandEnv("$HOME/.gnupg/pubring.gpg")
+}
+
+
+func httpClient (replace string, repo *helm.Repo, p *pushCmd) (*cm.Client, error)  {
+
+	// in case the repo is stored with cm:// protocol, remove it
+	var url string
+	if p.useHTTP {
+		url = strings.Replace(repo.Config.URL, "cm://", "http://", 1)
+	} else {
+		url = strings.Replace(repo.Config.URL, "cm://", "https://", 1)
+	}
+
+	url = strings.Replace(url, p.repoName, replace, 1)
+
+	client, err := cm.NewClient(
+		cm.URL(url),
+		cm.Username(p.username),
+		cm.Password(p.password),
+		cm.AccessToken(p.accessToken),
+		cm.AuthHeader(p.authHeader),
+		cm.ContextPath(p.contextPath),
+		cm.CAFile(p.caFile),
+		cm.CertFile(p.certFile),
+		cm.KeyFile(p.keyFile),
+		cm.InsecureSkipVerify(p.insecureSkipVerify),
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return client, err;
 }
