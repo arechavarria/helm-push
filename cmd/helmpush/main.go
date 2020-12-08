@@ -319,9 +319,11 @@ func (p *pushCmd) push() error {
 	}
 
 	tmpIndex, err := ioutil.TempDir("", "helm-push-index-")
-	index.IndexFile.Merge(newIndex)
-	index.IndexFile.SortEntries()
-	index.IndexFile.WriteFile(filepath.Join(tmpIndex, "index.yaml"), 0644)
+
+	newIndex.Merge(index.IndexFile)
+	newIndex.SortEntries()
+	newIndex.WriteFile(filepath.Join(tmpIndex, "index.yaml"), 0644)
+
 	fmt.Printf("Pushing %s to %s...\n", filepath.Base(filepath.Join(tmpIndex, "index.yaml")), p.repoName)
 	_, err = client.UploadChartPackage(filepath.Join(tmpIndex, "index.yaml"), p.forceUpload)
 	if err != nil {
